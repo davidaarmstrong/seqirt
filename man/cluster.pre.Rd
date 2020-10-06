@@ -4,12 +4,16 @@
 \alias{cluster.pre}
 \title{Proportional Reduction in Error for Binary IRT Models}
 \usage{
-cluster.pre(obj, data)
+cluster.pre(obj, data, threshold)
 }
 \arguments{
 \item{obj}{Object of class \code{binIRT}.}
 
 \item{data}{The data used to estimate \code{obj}.}
+
+\item{threshold}{Threshold for PRE values - if all
+PRE values are greater than the threshold, all
+variables will be identified as in the same cluster.}
 }
 \value{
 A list with the group for each variable in

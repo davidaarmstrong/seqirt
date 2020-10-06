@@ -11,7 +11,9 @@ Imports: stats,
          magrittr, 
          dplyr, 
          tibble, 
-         rlang
+         rlang, 
+         emIRT, 
+         pscl
 License: GPL-3
 Encoding: UTF-8
 LazyData: true
