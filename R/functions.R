@@ -40,4 +40,11 @@ cluster.pre <- function(obj, data){
 }
 
 
-
+##' Sequential MIRT Estimation
+##'
+##' Estimates a multidimensional IRT model by sequentially
+##' identifying variables that correspond with each dimension.
+##' Once identified, the models  are re-estimated with only the
+##' relevant variables.
+##'
+##' @param
