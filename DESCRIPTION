@@ -1,0 +1,19 @@
+Package: smirt
+Title: Sequential Multi-dimensional Item Response Theory
+Version: 0.0.0.9000
+Authors@R: 
+    person(given = "Dave",
+           family = "Armstrong",
+           role = c("aut", "cre"),
+           email = "dave@quantoid.net")
+Description: Estimates a sequential mult-dimensional Item Response Theory model using the emIRT framework.
+Imports: stats, 
+         magrittr, 
+         dplyr, 
+         tibble, 
+         rlang
+License: GPL-3
+Encoding: UTF-8
+LazyData: true
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.1.0
