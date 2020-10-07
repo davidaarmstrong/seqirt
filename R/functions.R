@@ -46,6 +46,58 @@ cluster.pre <- function(obj, data, threshold){
   }
 }
 
+##' Binary IRT Screener
+##'
+##' Implements a screening pass of a cross-sectional binary IRT to identify
+##' variables to be included for each dimension.
+##'
+##' @param X Roll call matrix
+##' @param Dim Number of dimensions to estimate
+##' @param control List of control arguments for the `binIRT()` function from the `emIRT` package.
+##'
+##' @export
+
+bin_screen <- function(X, Dim = 2, control=NULL){
+reuse <- 1:ncol(X)
+keeps <- vector(mode="list", length=Dim)
+if(is.null(control)){
+  ctrl <- list(threads = 1,
+               verbose = FALSE,
+               thresh = 1e-6)
+}else{
+ ctrl <- control
+}
+for(i in 1:(Dim-1)){
+  rcX <- rollcall(X[, reuse])
+  cX <- convertRC(rcX)
+  starts <- getStarts(cX$n, cX$m, 1)
+  priors <- makePriors(cX$n, cX$m, 1)
+
+  tmp <- binIRT(.rc=cX,
+                .starts = starts,
+                .priors = priors,
+                .D = 1,
+                .control = ctrl)
+  cl <- cluster.pre(tmp, cX$votes, threshold=1)
+  keeps[[i]] <- reuse[which(cl$clusters == cl$high.clust)]
+  reuse <- reuse[-which(cl$clusters == cl$high.clust)]
+}
+rcX <- rollcall(X[, reuse])
+cX <- convertRC(rcX)
+starts <- getStarts(cX$n, cX$m, 1)
+priors <- makePriors(cX$n, cX$m, 1)
+tmp <- binIRT(.rc=cX,
+              .starts = starts,
+              .priors = priors,
+              .D = 1,
+              .control = ctrl)
+
+cl <- cluster.pre(tmp, cX$votes, threshold=thresh)
+keeps[[Dim]] <- reuse[which(cl$clusters == cl$high.clust)]
+
+return(keeps)
+}
+
 
 ##' Sequential MIRT Estimation
 ##'
@@ -80,39 +132,10 @@ seqIRT <- function(.data, Dim, thresh=.35, ...){
               verbose = FALSE,
               thresh = 1e-6)
   }
-  reuse <- 1:ncol(X)
-  keeps <- vector(mode="list", length=Dim)
-  for(i in 1:(Dim-1)){
-    rcX <- rollcall(X[, reuse])
-    cX <- convertRC(rcX)
-    starts <- getStarts(cX$n, cX$m, 1)
-    priors <- makePriors(cX$n, cX$m, 1)
-
-    tmp <- binIRT(.rc=cX,
-                   .starts = starts,
-                   .priors = priors,
-                   .D = 1,
-                   .control = ctrl)
-    cl <- cluster.pre(tmp, cX$votes, threshold=1)
-  keeps[[i]] <- reuse[which(cl$clusters == cl$high.clust)]
-  reuse <- reuse[-which(cl$clusters == cl$high.clust)]
-  }
-  rcX <- rollcall(X[, reuse])
-  cX <- convertRC(rcX)
-  starts <- getStarts(cX$n, cX$m, 1)
-  priors <- makePriors(cX$n, cX$m, 1)
-  tmp <- binIRT(.rc=cX,
-                .starts = starts,
-                .priors = priors,
-                .D = 1,
-                .control = ctrl)
-
-  cl <- cluster.pre(tmp, cX$votes, threshold=thresh)
-  keeps[[Dim]] <- reuse[which(cl$clusters == cl$high.clust)]
-
+  screen <- bin_screen(X, Dim, ctrl)
   mods <- vector(mode="list", length=Dim)
   for(i in 1:Dim){
-    rcX <- rollcall(X[, keeps[[i]]])
+    rcX <- rollcall(X[, screen$keeps[[i]]])
     cX <- convertRC(rcX)
     starts <- getStarts(cX$n, cX$m, 1)
     priors <- makePriors(cX$n, cX$m, 1)
@@ -124,7 +147,7 @@ seqIRT <- function(.data, Dim, thresh=.35, ...){
                        .control = ctrl)
 
   }
-  return(list(mods = mods, keeps = keeps))
+  return(list(mods = mods, keeps = screen$keeps))
 }
 
 ##' Sequential Dynamic MIRT Estimation
