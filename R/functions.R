@@ -59,6 +59,9 @@ km2 <- function(x, clusters, centers=NULL, tol=1e-05, maxit=15,...){
 ##' @param threshold Threshold for PRE values - if all
 ##' PRE values are greater than the threshold, all
 ##' variables will be identified as in the same cluster.
+##' @param type Should clustering be done on the PREs or
+##' should the values greater than a pre-defined threshold
+##' be returned?
 ##'
 ##' @return A list with the group for each variable in
 ##'  `cluster` and the cluster number with the high PRE
@@ -71,16 +74,18 @@ km2 <- function(x, clusters, centers=NULL, tol=1e-05, maxit=15,...){
 ##' @importFrom rlang .data
 
 
-cluster.pre <- function(obj, data, threshold){
-  data <- ifelse(data == -1, 0, data)
+cluster.pre <- function(obj, data, threshold, type=c("cluster", "absolute")){
+  type <- match.arg(type)
+  data[which(data == 0, arr.ind=TRUE)] <- NA
+  data[which(data == -1, arr.ind=TRUE)] <- 0
   preds <- pnorm(cbind(1, obj$means$x) %*% t(obj$means$beta))
   predx <- apply(preds, 2, function(x)as.numeric(x > .5))
   sames <- predx == data
-  pcp <- colMeans(sames)
-  pmc <- colMeans(data)
+  pcp <- colMeans(sames, na.rm=TRUE)
+  pmc <- colMeans(data, na.rm=TRUE)
   pmc <- ifelse(pmc > .5, pmc, 1-pmc)
   pre <- (pcp-pmc)/(1-pmc)
-  if(!all(pre >= threshold)){
+  if(!all(pre >= threshold) & type == "cluster"){
     ins <- km2(pre, ifelse(pre < 0, 1, NA))
     tmp <- tibble(pre = pre, cluster=ins$cluster)
     high.clust <- tmp %>%
@@ -93,7 +98,7 @@ cluster.pre <- function(obj, data, threshold){
       unname(.data)
     list(clusters = ins$cluster, high.clust=high.clust, pre = pre)
   }else{
-    list(clusters = rep(1, length(pre)), high.clust=1, pre = pre)
+    list(clusters = as.numeric(pre > threshold), high.clust=1, pre = pre)
   }
 }
 
@@ -107,11 +112,15 @@ cluster.pre <- function(obj, data, threshold){
 ##' @param thresh Threshold for the K-means clustering in the final
 ##' stage.  If all PRE values are above `thresh`, then no clustering will
 ##' be done and all and all remaining variables will be retained.
+##' ##' @param type Should clustering be done on the PREs or
+##' should the values greater than a pre-defined threshold
+##' be returned?
 ##' @param control List of control arguments for the `binIRT()` function from the `emIRT` package.
 ##'
 ##' @export
 
-bin_screen <- function(X, Dim = 2, thresh=.35, control=NULL){
+bin_screen <- function(X, Dim = 2, thresh=.35, type=c("cluster", "absolute"),  control=NULL){
+type = match.arg(type)
 reuse <- 1:ncol(X)
 keeps <- vector(mode="list", length=Dim)
 if(is.null(control)){
@@ -132,7 +141,7 @@ for(i in 1:(Dim-1)){
                 .priors = priors,
                 .D = 1,
                 .control = ctrl)
-  cl <- cluster.pre(tmp, cX$votes, threshold=1)
+  cl <- cluster.pre(tmp, cX$votes, threshold=thresh, type=type)
   keeps[[i]] <- reuse[which(cl$clusters == cl$high.clust)]
   reuse <- reuse[-which(cl$clusters == cl$high.clust)]
 }
@@ -146,7 +155,7 @@ tmp <- binIRT(.rc=cX,
               .D = 1,
               .control = ctrl)
 
-cl <- cluster.pre(tmp, cX$votes, threshold=thresh)
+cl <- cluster.pre(tmp, cX$votes, threshold=thresh, type=type)
 keeps[[Dim]] <- reuse[which(cl$clusters == cl$high.clust)]
 
 return(keeps)
