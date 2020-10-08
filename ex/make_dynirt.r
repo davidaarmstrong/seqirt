@@ -83,3 +83,5 @@ y7 <- cbind(y7, 1)
 p7 <- pnorm(y7 %*% mats[[7]])
 X <- cbind(X, array(rbinom(length(c(p7)), 1, p7), dim=dim(p7)))
 
+nbills <- rowSums(nitems)
+term <- rep(1:7, nbills)

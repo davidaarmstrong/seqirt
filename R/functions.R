@@ -1,3 +1,54 @@
+## TODO
+## dynamic IRT screener for dynamic IRT models
+##  - binary screener doesn't work as well.
+
+
+
+##' K-means Clustering With Some Known Cluster Memberships
+##'
+##' Estimates a k-means cluster analysis  on a single variable
+##' using Lloyd's Method for some known cluster memberships
+##' and some unknown-estimated cluster memberships.
+##'
+##' @param x variable to cluster
+##' @param clusters a vector where known cluster memberships are coded
+##' as either `1` or `2` and unknown are coded as `NA`.
+##' @param centers optional argument providing the starting values
+##' for the centers.
+##' @param tol tolerance for sum of squared center differences to stop
+##' iterating.
+##' @param maxit maximum number of iterations.
+##' @param ... not used.
+##'
+##' @return a list containing the centers and cluster memberships at the
+##' final iterations.
+##' @export
+##'
+km2 <- function(x, clusters, centers=NULL, tol=1e-05, maxit=15,...){
+  init.clust <- clusters
+  init.clust <- ifelse(is.na(clusters),
+                       sample(1:2, sum(is.na(clusters)), replace=TRUE),
+                       clusters)
+  if(is.null(centers)){
+    cdum <- cbind(as.numeric(init.clust == 1), as.numeric(init.clust == 2))
+    cdum <- apply(cdum, 2, function(x)x/sum(x))
+    centers <- c(x %*% cdum)
+  }
+  diff <- 1
+  k <- 1
+  while(diff > tol & k <= maxit){
+    old.centers <- centers
+    d <- abs(outer(x, centers, "-"))
+    tmp.c <- apply(d, 1, which.min)
+    new.clust <- ifelse(is.na(clusters), tmp.c, clusters)
+    cdum <- cbind(as.numeric(new.clust == 1), as.numeric(new.clust == 2))
+    cdum <- apply(cdum, 2, function(x)x/sum(x))
+    centers <- c(x %*% cdum)
+    diff <- sum((centers - old.centers)^2)
+  }
+  return(list(centers=centers, cluster=new.clust))
+}
+
 ##' Proportional Reduction in Error for Binary IRT Models
 ##'
 ##' Calculates the proportional reduction in error for
@@ -30,7 +81,7 @@ cluster.pre <- function(obj, data, threshold){
   pmc <- ifelse(pmc > .5, pmc, 1-pmc)
   pre <- (pcp-pmc)/(1-pmc)
   if(!all(pre >= threshold)){
-    ins <- kmeans(pre, 2)
+    ins <- km2(pre, ifelse(pre < 0, 1, NA))
     tmp <- tibble(pre = pre, cluster=ins$cluster)
     high.clust <- tmp %>%
       group_by(.data$cluster) %>%
@@ -40,9 +91,9 @@ cluster.pre <- function(obj, data, threshold){
       select(.data$cluster) %>%
       pull %>%
       unname(.data)
-    list(clusters = ins$cluster, high.clust=high.clust)
+    list(clusters = ins$cluster, high.clust=high.clust, pre = pre)
   }else{
-    list(clusters = rep(1, length(pre)), high.clust=1)
+    list(clusters = rep(1, length(pre)), high.clust=1, pre = pre)
   }
 }
 
@@ -53,11 +104,14 @@ cluster.pre <- function(obj, data, threshold){
 ##'
 ##' @param X Roll call matrix
 ##' @param Dim Number of dimensions to estimate
+##' @param thresh Threshold for the K-means clustering in the final
+##' stage.  If all PRE values are above `thresh`, then no clustering will
+##' be done and all and all remaining variables will be retained.
 ##' @param control List of control arguments for the `binIRT()` function from the `emIRT` package.
 ##'
 ##' @export
 
-bin_screen <- function(X, Dim = 2, control=NULL){
+bin_screen <- function(X, Dim = 2, thresh=.35, control=NULL){
 reuse <- 1:ncol(X)
 keeps <- vector(mode="list", length=Dim)
 if(is.null(control)){
@@ -183,36 +237,7 @@ seq_dynIRT <- function(.data, Dim, thresh=.35, ...){
                  verbose = FALSE,
                  thresh = 1e-6)
   }
-  reuse <- 1:ncol(X)
-  keeps <- vector(mode="list", length=Dim)
-  for(i in 1:(Dim-1)){
-    rcX <- rollcall(X[, reuse])
-    cX <- convertRC(rcX)
-    starts <- getStarts(cX$n, cX$m, 1)
-    priors <- makePriors(cX$n, cX$m, 1)
-
-    tmp <- binIRT(.rc=cX,
-                  .starts = starts,
-                  .priors = priors,
-                  .D = 1,
-                  .control = ctrl)
-    cl <- cluster.pre(tmp, cX$votes, threshold=1)
-    keeps[[i]] <- reuse[which(cl$clusters == cl$high.clust)]
-    reuse <- reuse[-which(cl$clusters == cl$high.clust)]
-  }
-  rcX <- rollcall(X[, reuse])
-  cX <- convertRC(rcX)
-  starts <- getStarts(cX$n, cX$m, 1)
-  priors <- makePriors(cX$n, cX$m, 1)
-  tmp <- binIRT(.rc=cX,
-                .starts = starts,
-                .priors = priors,
-                .D = 1,
-                .control = ctrl)
-
-  cl <- cluster.pre(tmp, cX$votes, threshold=thresh)
-  keeps[[Dim]] <- reuse[which(cl$clusters == cl$high.clust)]
-
+  screen <- bin_screen(X, Dim, ctrl)
   mods <- vector(mode="list", length=Dim)
   for(i in 1:Dim){
     rcX <- rollcall(X[, keeps[[i]]])
